@@ -1,0 +1,99 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+:root {
+  --background: #f0f4f8;
+  --foreground: #0f172a;
+  
+  /* Palette theme variables */
+  --navy-deep: #002d62;
+  --navy-base: #003366;
+  --navy-light: #003b70;
+  --royal-blue: #003066;
+  --gold-metallic: #f5b025;
+  --gold-metallic-hover: #d99818;
+  --coral-light: #e05a47;
+  --coral-bg: #fca5a5;
+  
+  --font-outfit: 'Outfit', sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  
+  --color-navy-deep: var(--navy-deep);
+  --color-navy-base: var(--navy-base);
+  --color-navy-light: var(--navy-light);
+  --color-royal-blue: var(--royal-blue);
+  --color-gold-metallic: var(--gold-metallic);
+  --color-coral-light: var(--coral-light);
+  
+  --font-sans: var(--font-outfit), var(--font-geist-sans);
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-outfit), sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbar for premium dashboard feel (Light Theme) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f0f4f8;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Animations & glassmorphism utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.glow-gold {
+  box-shadow: 0 4px 14px rgba(245, 176, 37, 0.35);
+}
+
+.glow-blue {
+  box-shadow: 0 4px 20px rgba(0, 48, 102, 0.15);
+}
+
+/* Pulse animation for map pins */
+@keyframes pinPulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 176, 37, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(245, 176, 37, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(245, 176, 37, 0);
+  }
+}
+
+.pulse-pin {
+  animation: pinPulse 2s infinite;
+}
+
+/* Smooth transition utility */
+.transition-all-300 {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
