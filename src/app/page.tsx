@@ -291,9 +291,7 @@ export default function Home() {
         <div className="w-full transition-all duration-300">
           <RutasDashboard
             rutas={rutasData}
-            onRutaUpdate={(updated) =>
-              setRutasData(prev => prev.map(r => r.id === updated.id ? updated : r))
-            }
+            onRutasChange={setRutasData}
           />
         </div>
       </div>

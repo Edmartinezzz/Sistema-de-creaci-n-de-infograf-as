@@ -4,7 +4,7 @@ import { RutaTransporte } from '../types';
 
 interface RutasDashboardProps {
   rutas: RutaTransporte[];
-  onRutaUpdate: (updated: RutaTransporte) => void;
+  onRutasChange: (updated: RutaTransporte[]) => void;
 }
 
 
@@ -55,10 +55,42 @@ const PINS = [
   { n: '40', x: 650, y: 84  },
 ];
 
-export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutaUpdate }) => {
-  // Sort incoming parsed routes dynamically by ID
-  const sortedRutas = [...rutas].sort((a, b) => a.id - b.id);
-  
+export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutasChange }) => {
+  // ── Sorting Mode State ──
+  const [sortMode, setSortMode] = useState<'id' | 'unidades' | 'nombre' | 'manual'>('manual');
+
+  // ── Edit Modal State ──
+  const [editingRuta, setEditingRuta] = useState<RutaTransporte | null>(null);
+  const [formRuta, setFormRuta] = useState('');
+  const [formUnidades, setFormUnidades] = useState(0);
+  const [formCoop, setFormCoop] = useState('');
+
+  // ── Add Modal State ──
+  const [addingRuta, setAddingRuta] = useState(false);
+  const [addId, setAddId] = useState(0);
+  const [addRuta, setAddRuta] = useState('');
+  const [addUnidades, setAddUnidades] = useState(0);
+  const [addCoop, setAddCoop] = useState('');
+
+  // ── Drag & Drop State ──
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  // Dynamic sorting function
+  const getSortedRutas = () => {
+    const arr = [...rutas];
+    if (sortMode === 'id') {
+      return arr.sort((a, b) => a.id - b.id);
+    } else if (sortMode === 'unidades') {
+      return arr.sort((a, b) => b.unidades - a.unidades);
+    } else if (sortMode === 'nombre') {
+      return arr.sort((a, b) => a.ruta.localeCompare(b.ruta));
+    }
+    return arr; // 'manual' / natural order
+  };
+
+  const sortedRutas = getSortedRutas();
+
   // Split routes list dynamically and evenly into two columns
   const midPoint = Math.ceil(sortedRutas.length / 2);
   const leftCol = sortedRutas.slice(0, midPoint);
@@ -68,12 +100,7 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutaUpd
   const totalRutas = sortedRutas.length;
   const totalUnidades = sortedRutas.reduce((s, r) => s + r.unidades, 0);
 
-  // ── Edit Modal State ──
-  const [editingRuta, setEditingRuta] = useState<RutaTransporte | null>(null);
-  const [formRuta, setFormRuta] = useState('');
-  const [formUnidades, setFormUnidades] = useState(0);
-  const [formCoop, setFormCoop] = useState('');
-
+  // Open edit modal
   const openEdit = (ruta: RutaTransporte) => {
     setEditingRuta(ruta);
     setFormRuta(ruta.ruta);
@@ -81,53 +108,156 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutaUpd
     setFormCoop(ruta.cooperativa);
   };
 
+  // Save edited route
   const saveEdit = () => {
     if (!editingRuta) return;
-    onRutaUpdate({
+    const updated = {
       ...editingRuta,
       ruta: formRuta.trim().toUpperCase(),
       unidades: Math.max(0, Number(formUnidades) || 0),
-      cooperativa: formCoop.trim(),
-    });
+      cooperativa: formCoop.trim() || "LÍNEA / COOPERATIVA INDEPENDIENTE",
+    };
+    onRutasChange(rutas.map(r => r.id === updated.id ? updated : r));
     setEditingRuta(null);
   };
 
   const cancelEdit = () => setEditingRuta(null);
 
+  // Delete route
+  const deleteRuta = (id: number) => {
+    onRutasChange(rutas.filter(r => r.id !== id));
+  };
+
+  // Open add route modal
+  const getNextId = () => {
+    if (rutas.length === 0) return 1;
+    return Math.max(...rutas.map(r => r.id)) + 1;
+  };
+
+  const openAddModal = () => {
+    setAddId(getNextId());
+    setAddRuta('');
+    setAddUnidades(0);
+    setAddCoop('');
+    setAddingRuta(true);
+  };
+
+  // Save new route
+  const saveAdd = () => {
+    if (rutas.some(r => r.id === Number(addId))) {
+      alert(`El ID ${addId} ya está siendo usado por otra ruta.`);
+      return;
+    }
+    if (!addRuta.trim()) {
+      alert("El nombre de la ruta no puede estar vacío.");
+      return;
+    }
+    const newRuta: RutaTransporte = {
+      id: Number(addId),
+      ruta: addRuta.trim().toUpperCase(),
+      unidades: Math.max(0, Number(addUnidades) || 0),
+      cooperativa: addCoop.trim() || "LÍNEA / COOPERATIVA INDEPENDIENTE",
+    };
+    onRutasChange([...rutas, newRuta]);
+    setAddingRuta(false);
+  };
+
+  // HTML5 Drag & Drop handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex !== null && draggedIndex !== index) {
+      setDragOverIndex(index);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    const updated = [...sortedRutas];
+    const [removed] = updated.splice(draggedIndex, 1);
+    updated.splice(targetIndex, 0, removed);
+
+    setSortMode('manual');
+    onRutasChange(updated);
+
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+
+  // Manual move helper
+  const moveItem = (fromIndex: number, direction: number) => {
+    const targetIndex = fromIndex + direction;
+    if (targetIndex < 0 || targetIndex >= sortedRutas.length) return;
+
+    const updated = [...sortedRutas];
+    const [removed] = updated.splice(fromIndex, 1);
+    updated.splice(targetIndex, 0, removed);
+
+    setSortMode('manual');
+    onRutasChange(updated);
+  };
+
   /* ─── Single route pill ─── */
-  const Pill = ({ ruta }: { ruta: RutaTransporte }) => {
+  const Pill = ({ ruta, index }: { ruta: RutaTransporte; index: number }) => {
     const isBlue = [6, 17, 20, 21, 23, 26].includes(ruta.id);
     const gold = !isBlue;
     
+    const isDragged = draggedIndex === index;
+    const isDragOver = dragOverIndex === index;
+
     return (
       <div
+        draggable={true}
+        onDragStart={(e) => handleDragStart(e, index)}
+        onDragOver={(e) => handleDragOver(e, index)}
+        onDrop={(e) => handleDrop(e, index)}
+        onDragEnd={handleDragEnd}
         onClick={() => openEdit(ruta)}
-        title="Haz clic para editar esta ruta"
+        title="Haz clic para editar esta ruta. Arrástrala para reordenar."
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: 7,
-          background: 'linear-gradient(90deg, #003a75 0%, #001c3a 100%)',
+          background: isDragOver 
+            ? 'linear-gradient(90deg, #004d99 0%, #002d59 100%)'
+            : 'linear-gradient(90deg, #003a75 0%, #001c3a 100%)',
           borderRadius: 999,
           padding: '4px 12px 4px 4px',
           marginBottom: 5,
           minHeight: 46,
-          border: '1.5px solid #002a58',
-          boxShadow: '0 3px 7px rgba(0,0,0,0.35)',
+          border: isDragOver ? '2px solid #f5b025' : '1.5px solid #002a58',
+          boxShadow: isDragOver ? '0 5px 18px rgba(245,176,37,0.45)' : '0 3px 7px rgba(0,0,0,0.35)',
           minWidth: 0,
           boxSizing: 'border-box',
-          cursor: 'pointer',
-          transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
+          cursor: 'grab',
+          opacity: isDragged ? 0.4 : 1,
+          transform: isDragOver ? 'scale(1.025)' : 'scale(1)',
+          transition: 'transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease, background 0.15s ease',
         }}
         onMouseEnter={e => {
-          (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.015)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 5px 18px rgba(245,176,37,0.35)';
-          (e.currentTarget as HTMLDivElement).style.borderColor = '#f5b025';
+          if (!isDragOver) {
+            (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.015)';
+            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 5px 18px rgba(245,176,37,0.35)';
+            (e.currentTarget as HTMLDivElement).style.borderColor = '#f5b025';
+          }
         }}
         onMouseLeave={e => {
-          (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)';
-          (e.currentTarget as HTMLDivElement).style.boxShadow = '0 3px 7px rgba(0,0,0,0.35)';
-          (e.currentTarget as HTMLDivElement).style.borderColor = '#002a58';
+          if (!isDragOver) {
+            (e.currentTarget as HTMLDivElement).style.transform = 'scale(1)';
+            (e.currentTarget as HTMLDivElement).style.boxShadow = '0 3px 7px rgba(0,0,0,0.35)';
+            (e.currentTarget as HTMLDivElement).style.borderColor = '#002a58';
+          }
         }}
       >
         {/* Number circle */}
@@ -168,11 +298,68 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutaUpd
             {ruta.cooperativa}
           </div>
         </div>
-        {/* Edit pencil icon hint */}
-        <div style={{
-          fontSize: 11, color: 'rgba(245,176,37,0.5)', flexShrink: 0,
-          paddingLeft: 4,
-        }}>✏️</div>
+        {/* Actions panel */}
+        <div 
+          onClick={e => e.stopPropagation()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            flexShrink: 0,
+            background: 'rgba(0,0,0,0.2)',
+            borderRadius: 8,
+            padding: '2px 4px',
+            border: '1px solid rgba(255,255,255,0.05)'
+          }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              moveItem(index, -1);
+            }}
+            disabled={index === 0}
+            style={{
+              background: 'none', border: 'none', 
+              color: index === 0 ? 'rgba(255,255,255,0.15)' : '#f5b025',
+              cursor: index === 0 ? 'not-allowed' : 'pointer', 
+              fontSize: 10, padding: '2px', fontWeight: 'bold'
+            }}
+            title="Subir ruta"
+          >
+            ▲
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              moveItem(index, 1);
+            }}
+            disabled={index === sortedRutas.length - 1}
+            style={{
+              background: 'none', border: 'none', 
+              color: index === sortedRutas.length - 1 ? 'rgba(255,255,255,0.15)' : '#f5b025',
+              cursor: index === sortedRutas.length - 1 ? 'not-allowed' : 'pointer', 
+              fontSize: 10, padding: '2px', fontWeight: 'bold'
+            }}
+            title="Bajar ruta"
+          >
+            ▼
+          </button>
+          <span 
+            onClick={() => openEdit(ruta)}
+            style={{ 
+              fontSize: 9, 
+              color: 'rgba(255,255,255,0.6)', 
+              cursor: 'pointer',
+              marginLeft: 2,
+              padding: '2px'
+            }}
+            title="Editar ruta"
+          >
+            ✏️
+          </span>
+        </div>
       </div>
     );
   };
@@ -298,6 +485,108 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutaUpd
           </svg>
         </div>
 
+        {/* ══ TOOLBAR: SORT & ADD ROUTE ══ */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginBottom: 16,
+          background: 'rgba(0,47,108,0.04)',
+          padding: '10px 16px',
+          borderRadius: 16,
+          border: '1.5px solid rgba(0,47,108,0.08)',
+        }}>
+          {/* Left side: Sort Mode Selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, fontWeight: 900, color: '#002f6c', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Ordenar:
+            </span>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {(['id', 'unidades', 'nombre', 'manual'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setSortMode(mode)}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: 999,
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    border: '1.5px solid',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.02em',
+                    background: sortMode === mode ? 'linear-gradient(90deg, #003a75 0%, #001c3a 100%)' : '#ffffff',
+                    color: sortMode === mode ? '#f5b025' : '#002d62',
+                    borderColor: sortMode === mode ? '#002a58' : '#cbd5e1',
+                    boxShadow: sortMode === mode ? '0 2px 4px rgba(0,0,0,0.15)' : 'none',
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  {mode === 'id' && '🔢 ID'}
+                  {mode === 'unidades' && '🚍 Unidades'}
+                  {mode === 'nombre' && '🔤 Nombre'}
+                  {mode === 'manual' && '🎛️ Manual'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right side: Add Route Button */}
+          <button
+            type="button"
+            onClick={openAddModal}
+            style={{
+              padding: '8px 16px',
+              borderRadius: 999,
+              fontSize: 11,
+              fontWeight: 900,
+              background: 'linear-gradient(90deg, #f5b025 0%, #d99818 100%)',
+              color: '#1a0e00',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 3px 8px rgba(245,176,37,0.3)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              transition: 'transform 0.15s, opacity 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.03)';
+              e.currentTarget.style.opacity = '0.95';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.opacity = '1';
+            }}
+          >
+            <span>➕</span> Agregar Ruta
+          </button>
+        </div>
+
+        {/* Tip for manual mode */}
+        {sortMode === 'manual' && sortedRutas.length > 0 && (
+          <div style={{
+            fontSize: 10.5,
+            color: '#003b70',
+            fontWeight: 700,
+            textAlign: 'center',
+            marginBottom: 14,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            background: 'rgba(245,176,37,0.08)',
+            padding: '6px 12px',
+            borderRadius: 8,
+            border: '1px dashed rgba(245,176,37,0.3)'
+          }}>
+            💡 Arrastra las tarjetas o usa las flechas (▲/▼) para organizar las rutas como desees.
+          </div>
+        )}
+
         {/* ══ ROUTE CARDS — 2 COLUMNS ══ */}
         {sortedRutas.length === 0 ? (
           <div style={{
@@ -323,10 +612,10 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutaUpd
             width: '100%',
           }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-              {leftCol.map(r  => <Pill key={r.id} ruta={r} />)}
+              {leftCol.map((r, i) => <Pill key={r.id} ruta={r} index={i} />)}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-              {rightCol.map(r => <Pill key={r.id} ruta={r} />)}
+              {rightCol.map((r, i) => <Pill key={r.id} ruta={r} index={midPoint + i} />)}
             </div>
           </div>
         )}
@@ -497,26 +786,231 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutaUpd
           </div>
 
           {/* Action buttons */}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={saveEdit}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: 12,
+                  background: 'linear-gradient(90deg, #003a75, #001c3a)',
+                  color: '#f5b025', border: 'none',
+                  fontWeight: 900, fontSize: 13, textTransform: 'uppercase',
+                  letterSpacing: '0.07em', cursor: 'pointer',
+                  fontFamily: "'Outfit', sans-serif",
+                  boxShadow: '0 4px 14px rgba(0,30,80,0.3)',
+                  transition: 'opacity 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+              >
+                ✔ Guardar
+              </button>
+              <button
+                onClick={cancelEdit}
+                style={{
+                  flex: 1, padding: '11px 0', borderRadius: 12,
+                  background: '#f1f5f9',
+                  color: '#475569', border: '2px solid #e2e8f0',
+                  fontWeight: 800, fontSize: 13, textTransform: 'uppercase',
+                  letterSpacing: '0.07em', cursor: 'pointer',
+                  fontFamily: "'Outfit', sans-serif",
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#e2e8f0')}
+                onMouseLeave={e => (e.currentTarget.style.background = '#f1f5f9')}
+              >
+                ✕ Cancelar
+              </button>
+            </div>
+
             <button
-              onClick={saveEdit}
+              onClick={() => {
+                if (window.confirm(`¿Está seguro de que desea eliminar la ruta ${editingRuta.id}?`)) {
+                  deleteRuta(editingRuta.id);
+                  setEditingRuta(null);
+                }
+              }}
               style={{
-                flex: 1, padding: '11px 0', borderRadius: 12,
-                background: 'linear-gradient(90deg, #003a75, #001c3a)',
-                color: '#f5b025', border: 'none',
-                fontWeight: 900, fontSize: 13, textTransform: 'uppercase',
+                padding: '11px 0', borderRadius: 12,
+                background: '#ef4444',
+                color: '#ffffff', border: 'none',
+                fontWeight: 900, fontSize: 12, textTransform: 'uppercase',
                 letterSpacing: '0.07em', cursor: 'pointer',
                 fontFamily: "'Outfit', sans-serif",
-                boxShadow: '0 4px 14px rgba(0,30,80,0.3)',
+                boxShadow: '0 4px 12px rgba(239,68,68,0.2)',
                 transition: 'opacity 0.15s',
               }}
               onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
               onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
             >
-              ✔ Guardar
+              🗑 Eliminar Ruta
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* ══ ADD ROUTE MODAL OVERLAY ══ */}
+    {addingRuta && (
+      <div
+        onClick={() => setAddingRuta(false)}
+        style={{
+          position: 'fixed', inset: 0,
+          background: 'rgba(0,10,30,0.65)',
+          backdropFilter: 'blur(4px)',
+          zIndex: 9999,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            background: '#ffffff',
+            borderRadius: 20,
+            padding: '28px 32px',
+            width: '100%',
+            maxWidth: 420,
+            boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
+            border: '3px solid #f5b025',
+            fontFamily: "'Outfit', sans-serif",
+          }}
+        >
+          {/* Modal header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
+            <div style={{
+              width: 40, height: 40, borderRadius: '50%',
+              background: '#f5b025',
+              color: '#1a0e00',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 900, fontSize: 15,
+              border: '2px solid #002060',
+              flexShrink: 0,
+            }}>
+              ➕
+            </div>
+            <div>
+              <div style={{ fontWeight: 900, fontSize: 15, color: '#002060', textTransform: 'uppercase' }}>
+                Agregar Nueva Ruta
+              </div>
+              <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>
+                Añada una nueva ruta al reporte y mapa interactivo
+              </div>
+            </div>
+          </div>
+
+          {/* Field: ID de Ruta */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#002060', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+              ID / Número de Ruta
+            </label>
+            <input
+              type="number"
+              min={1}
+              value={addId}
+              onChange={e => setAddId(Number(e.target.value))}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '9px 14px', borderRadius: 10,
+                border: '2px solid #cbd5e1', fontSize: 13, fontWeight: 700,
+                color: '#1e293b', outline: 'none',
+                fontFamily: "'Outfit', sans-serif",
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#f5b025'}
+              onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+            />
+          </div>
+
+          {/* Field: Nombre de Ruta */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#002060', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+              Nombre de la Ruta
+            </label>
+            <input
+              type="text"
+              placeholder="E.j. CATIA LA MAR - CARAYACA"
+              value={addRuta}
+              onChange={e => setAddRuta(e.target.value)}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '9px 14px', borderRadius: 10,
+                border: '2px solid #cbd5e1', fontSize: 13, fontWeight: 700,
+                color: '#1e293b', outline: 'none',
+                fontFamily: "'Outfit', sans-serif",
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#f5b025'}
+              onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+            />
+          </div>
+
+          {/* Field: Unidades */}
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#002060', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+              Unidades en Servicio
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={addUnidades}
+              onChange={e => setAddUnidades(Number(e.target.value))}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '9px 14px', borderRadius: 10,
+                border: '2px solid #cbd5e1', fontSize: 13, fontWeight: 700,
+                color: '#1e293b', outline: 'none',
+                fontFamily: "'Outfit', sans-serif",
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#f5b025'}
+              onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+            />
+          </div>
+
+          {/* Field: Cooperativa */}
+          <div style={{ marginBottom: 24 }}>
+            <label style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#002060', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 5 }}>
+              Línea / Cooperativa
+            </label>
+            <input
+              type="text"
+              placeholder="E.j. COOP. SAN JOSE DE CARAYACA"
+              value={addCoop}
+              onChange={e => setAddCoop(e.target.value)}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                padding: '9px 14px', borderRadius: 10,
+                border: '2px solid #cbd5e1', fontSize: 13, fontWeight: 700,
+                color: '#1e293b', outline: 'none',
+                fontFamily: "'Outfit', sans-serif",
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={e => e.target.style.borderColor = '#f5b025'}
+              onBlur={e => e.target.style.borderColor = '#cbd5e1'}
+            />
+          </div>
+
+          {/* Action buttons */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={saveAdd}
+              style={{
+                flex: 1, padding: '11px 0', borderRadius: 12,
+                background: 'linear-gradient(90deg, #f5b025, #d99818)',
+                color: '#1a0e00', border: 'none',
+                fontWeight: 900, fontSize: 13, textTransform: 'uppercase',
+                letterSpacing: '0.07em', cursor: 'pointer',
+                fontFamily: "'Outfit', sans-serif",
+                boxShadow: '0 4px 14px rgba(245,176,37,0.3)',
+                transition: 'opacity 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = '0.85')}
+              onMouseLeave={e => (e.currentTarget.style.opacity = '1')}
+            >
+              ✔ Agregar
             </button>
             <button
-              onClick={cancelEdit}
+              onClick={() => setAddingRuta(false)}
               style={{
                 flex: 1, padding: '11px 0', borderRadius: 12,
                 background: '#f1f5f9',
