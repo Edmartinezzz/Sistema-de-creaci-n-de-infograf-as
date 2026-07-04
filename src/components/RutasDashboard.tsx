@@ -300,6 +300,7 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutasCh
         </div>
         {/* Actions panel */}
         <div 
+          className="no-export"
           onClick={e => e.stopPropagation()}
           style={{
             display: 'flex',
@@ -486,7 +487,7 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutasCh
         </div>
 
         {/* ══ TOOLBAR: SORT & ADD ROUTE ══ */}
-        <div style={{
+        <div className="no-export" style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -570,7 +571,7 @@ export const RutasDashboard: React.FC<RutasDashboardProps> = ({ rutas, onRutasCh
 
         {/* Tip for manual mode */}
         {sortMode === 'manual' && sortedRutas.length > 0 && (
-          <div style={{
+          <div className="no-export" style={{
             fontSize: 10.5,
             color: '#003b70',
             fontWeight: 700,

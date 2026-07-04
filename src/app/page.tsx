@@ -133,6 +133,13 @@ export default function Home() {
     toPng(element, { 
       pixelRatio: 2,
       backgroundColor: '#ffffff',
+      filter: (node) => {
+        const el = node as HTMLElement;
+        if (el.classList && el.classList.contains('no-export')) {
+          return false;
+        }
+        return true;
+      },
       style: {
         transform: 'scale(1)',
         transformOrigin: 'top left',
